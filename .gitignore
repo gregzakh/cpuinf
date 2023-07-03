@@ -1,0 +1,6 @@
+*
+!.gitignore
+!license
+!main.py
+!lib/*.py
+!*/

@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-__all__ = ['getmodel', 'getvendor']
+__all__ = ['getfrequency', 'getmodel', 'getvendor']
 
 from common import *
 from ctypes import (
-   CFUNCTYPE, FormatError, GetLastError, POINTER, byref, c_long, c_size_t, c_ulong,
-   c_void_p, create_unicode_buffer, memmove, windll
+   CFUNCTYPE, FormatError, GetLastError, POINTER, byref, cast, c_long, c_size_t,
+   c_ulong, c_void_p, create_string_buffer, create_unicode_buffer, memmove, windll
 )
 from sys    import stderr
 from winreg import (
@@ -17,6 +17,12 @@ MEM_RELEASE = c_ulong(0x00008000).value
 PAGE_EXECUTE_READWRITE = c_ulong(0x00000040).value
 
 STATUS_INFO_LENGTH_MISMATCH = c_long(0xC0000004).value
+STATUS_BUFFER_TOO_SMALL = c_long(0xC0000023).value
+
+class PROCESSOR_POWER_INFORMATION(CStruct):
+   _fields_ = [(x, c_ulong) for x in (
+      'Number', 'MaxMhz', 'CurrentMhz', 'MhzLimit', 'MaxIdleState', 'CurrentIdleState'
+   )]
 
 VirtualAlloc = windll.kernelbase.VirtualAlloc
 VirtualAlloc.restype = c_void_p # LPVOID
@@ -35,8 +41,18 @@ VirtualFree.argtypes = (
    c_ulong   # DWORD  dwFreeType
 )
 
+NtPowerInformation       = windll.ntdll.NtPowerInformation
+NtPowerInformation.restype = c_long # NTSTATUS
+NtPowerInformation.argtypes = (
+   c_ulong,  # POWER_INFORMATION_LEVEL
+   c_void_p, # InputBuffer
+   c_ulong,  # InputBufferLength
+   c_void_p, # OutputBuffer
+   c_ulong   # OutputBufferLength
+)
+
 NtQuerySystemInformation = windll.ntdll.NtQuerySystemInformation
-NtQuerySystemInformation.restype = c_long
+NtQuerySystemInformation.restype = c_long # NTSTATUS
 NtQuerySystemInformation.argtypes = (
    c_ulong,  # SYSTEM_INFORMATION_CLASS
    c_void_p, # SystemInformation
@@ -75,6 +91,14 @@ def read_registry(v : str) -> str:
          CloseKey(cur) # prevent leak
    CloseKey(key)
    return next(iter(set(res)))
+
+def getfrequency():
+   # print(read_registry('~MHz'))
+   buf = create_string_buffer((sz := sizeof(PROCESSOR_POWER_INFORMATION)))
+   while STATUS_BUFFER_TOO_SMALL == NtPowerInformation(11, None, 0, buf, len(buf)):
+      buf = create_string_buffer(len(buf) * 2) # ProcessorInformation = 0n11
+   arr = cast(buf, POINTER(PROCESSOR_POWER_INFORMATION * (len(buf) // sz)))
+   print(next(iter(set(x.CurrentMhz for x in arr.contents))))
 
 def getmodel():
    try:

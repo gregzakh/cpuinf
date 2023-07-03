@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
-__all__ = ['CPUID_LEAF', 'cmnmodel', 'cmnvendor', 'opcodes']
+__all__ = ['CPUID_LEAF', 'CStruct', 'cmnmodel', 'cmnvendor', 'opcodes', 'sizeof']
 
-from ctypes import Structure, c_uint32
+from ctypes import Structure, c_uint32, sizeof
 from os     import name
 from struct import pack
 from sys    import maxsize
 
-class CPUID_LEAF(Structure):
-   _fields_ = [(x, c_uint32) for x in ('eax', 'ebx', 'ecx', 'edx')]
+class CStruct(Structure):
    @property
    def raw(self):
       return [getattr(self, x) for x, _ in self._fields_]
+   @property
+   def size(self):
+      return sizeof(self)
+
+class CPUID_LEAF(CStruct):
+   _fields_ = [(x, c_uint32) for x in ('eax', 'ebx', 'ecx', 'edx')]
 
 opcodes = bytes(([
    0x53,                           # push  rbx

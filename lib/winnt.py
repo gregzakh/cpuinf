@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__all__ = ['getfrequency', 'getmodel', 'getvendor']
+__all__ = ['getfrequency', 'gethypervisor', 'getmodel', 'getvendor']
 
 from common import *
 from ctypes import (
@@ -67,6 +67,7 @@ RtlNtStatusToDosError.argtype = c_long # NTSTATUS
 def NT_SUCCESS(Status):
    return Status >= 0
 
+
 class CPUID(object):
    def __init__(self):
       sz = len(opcodes)
@@ -82,6 +83,7 @@ class CPUID(object):
       if not VirtualFree(self.addr, 0, MEM_RELEASE):
          print(FormatError(GetLastError()), file=stderr)
 
+
 def read_registry(v : str) -> str:
    res, inf = [], r'HARDWARE\DESCRIPTION\System\CentralProcessor'
    with OpenKeyEx(HKLM, inf) as key:
@@ -92,6 +94,7 @@ def read_registry(v : str) -> str:
    CloseKey(key)
    return next(iter(set(res)))
 
+
 def getfrequency():
    # print(read_registry('~MHz'))
    buf = create_string_buffer((sz := sizeof(PROCESSOR_POWER_INFORMATION)))
@@ -99,6 +102,12 @@ def getfrequency():
       buf = create_string_buffer(len(buf) * 2) # ProcessorInformation = 0n11
    arr = cast(buf, POINTER(PROCESSOR_POWER_INFORMATION * (len(buf) // sz)))
    print(next(iter(set(x.CurrentMhz for x in arr.contents))))
+
+
+def gethypervisor():
+   data = CPUID() # bit 32 of ECX (leaf 1) points if the feature is present
+   print(cmnvendor(data(0x40000000), True) if 1 == data(1).raw[2] >> 31 else 'Mot presented.')
+
 
 def getmodel():
    try:
@@ -116,6 +125,7 @@ def getmodel():
          print(FormatError(RtlNtStatusToDosError(nts)))
          return
       print(str(buf, 'utf-8').strip())
+
 
 def getvendor():
    try:

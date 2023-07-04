@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__all__ = ['getfrequency', 'getmodel', 'getvendor']
+__all__ = ['getfrequency', 'gethypervisor', 'getmodel', 'getvendor']
 
 from common import *
 from ctypes import CFUNCTYPE, POINTER, addressof, c_uint32, c_void_p
@@ -19,6 +19,7 @@ class CPUID(object):
       del self.addr
       self.memo.close()
 
+
 def read_cpuinfo(v : str) -> str:
    with open('/proc/cpuinfo', 'r') as f:
       res = ''.join(filter( # looking for among unique strings
@@ -26,14 +27,22 @@ def read_cpuinfo(v : str) -> str:
       )).split(':')[1].strip()
    return res
 
+
 def getfrequency():
    print(read_cpuinfo('cpu mhz'))
+
+
+def gethypervisor():
+   data = CPUID() # bit 31 of ECX (leaf 1) points if the feature is present
+   print(cmnvendor(data(0x40000000), True) if 1 == data(1).raw[2] >> 31 else 'Not presented.')
+
 
 def getmodel():
    try:
       print(cmnmodel(CPUID()))
    except Exception:
       print(read_cpuinfo('model name'))
+
 
 def getvendor():
    try:

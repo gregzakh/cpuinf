@@ -65,9 +65,10 @@ def cmnmodel(c):
       ).decode('utf-8') for i in range(2, 5)
    ]).strip()
 #
-# def cmnvendor(c : CPUID_LEAF) -> str
+# def cmnvendor(c : CPUID_LEAF, hv : bool) -> str
 #
-def cmnvendor(c):
+def cmnvendor(c, hv):
    raw = c.raw[1:]
-   raw[1], raw[2] = raw[2], raw[1]
+   if not hv:
+      raw[1], raw[2] = raw[2], raw[1]
    return pack('III', *raw).decode('utf-8')

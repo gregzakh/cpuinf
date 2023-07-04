@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-__all__ = ['getfrequency', 'gethypervisor', 'getmodel', 'getvendor']
+__all__ = ['getcache', 'getfrequency', 'gethypervisor', 'getmodel', 'getvendor']
 
 from common import *
 from ctypes import (
-   CFUNCTYPE, FormatError, GetLastError, POINTER, byref, cast, c_long, c_size_t,
-   c_ulong, c_void_p, create_string_buffer, create_unicode_buffer, memmove, windll
+   CFUNCTYPE, FormatError, GetLastError, POINTER, Union, byref, cast, c_byte, c_long, c_size_t, c_ulong,
+   c_ulonglong, c_ushort, c_void_p, create_string_buffer, create_unicode_buffer, memmove, windll
 )
+from enum   import IntEnum
 from sys    import stderr
 from winreg import (
    HKEY_LOCAL_MACHINE as HKLM, CloseKey, EnumKey, OpenKeyEx, QueryInfoKey, QueryValueEx
@@ -23,6 +24,55 @@ class PROCESSOR_POWER_INFORMATION(CStruct):
    _fields_ = [(x, c_ulong) for x in (
       'Number', 'MaxMhz', 'CurrentMhz', 'MhzLimit', 'MaxIdleState', 'CurrentIdleState'
    )]
+
+
+class PROCESSORCORE(CStruct):
+   _fields_ = [
+      ('Flags', c_byte),
+   ]
+
+
+class NUMANODE(CStruct):
+   _fields_ = [
+      ('NodeNumber', c_ulong),
+   ]
+
+
+PROCESSOR_CACHE_TYPE = IntEnum('PROCESSOR_CACHE_TYPE', [
+   'CacheUnified', 'CacheInstruction', 'CacheData', 'CacheTrace'
+], start=0)
+
+
+class CACHE_DESCRIPTOR(CStruct):
+   _fields_ = [
+      ('Level',         c_byte),
+      ('Associativity', c_byte),
+      ('LineSize',      c_ushort),
+      ('Size',          c_ulong),
+      ('_Type',         c_ulong),
+   ]
+   @property
+   def Type(self):
+      return PROCESSOR_CACHE_TYPE(self._Type).name
+
+
+class SYSTEM_LOGICAL_PROCESSOR_INFORMATION_UNION(Union):
+   _fields_ = [
+      ('ProcessorCore', PROCESSORCORE),
+      ('NumaNode',      NUMANODE),
+      ('Cache',         CACHE_DESCRIPTOR),
+      ('Reserved',      c_ulonglong * 2),
+   ]
+
+
+ULONG_PTR = c_ulonglong if maxsize > 2**32 else c_ulong
+class SYSTEM_LOGICAL_PROCESSOR_INFORMATION(CStruct):
+   _fields_ = [
+      ('ProcessorMask', ULONG_PTR),
+      ('Relashionship', ULONG_PTR),
+      ('ProcessorInfo', SYSTEM_LOGICAL_PROCESSOR_INFORMATION_UNION),
+   ]
+
 
 VirtualAlloc = windll.kernelbase.VirtualAlloc
 VirtualAlloc.restype = c_void_p # LPVOID
@@ -95,6 +145,26 @@ def read_registry(v : str) -> str:
    return next(iter(set(res)))
 
 
+def getcache():
+   # note that there is GetLogicalProcessorInformation in kernelbase.dll
+   req = c_ulong(0) # SystemLogicalProcessorInformation = 0n73
+   # check GetLastError value when using GetLogicalProcessorInformation:
+   # if it's ERROR_INSUFFICIENT_BUFFER (0x0000007A) then allocate a buffer with required length
+   # otherwise something's wrong and there's no way to complete the task (tada!..)
+   if STATUS_INFO_LENGTH_MISMATCH != (nts := NtQuerySystemInformation(73, None, 0, byref(req))):
+      print(FormatError(RtlNtStatusToDosError(nts)))
+      return
+   buf = create_string_buffer(req.value)
+   if not NT_SUCCESS((nts := NtQuerySystemInformation(73, buf, len(buf), None))):
+      print(FormatError(RtlNtStatusToDosError(nts)))
+      return
+   fmt = '{0.Type:<19}L{0.Level}: {1:5} KB, Assoc {0.Associativity:2}, LineSize {0.LineSize}'
+   for x in cast(buf, POINTER(SYSTEM_LOGICAL_PROCESSOR_INFORMATION * (
+                           len(buf) // sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION)))).contents:
+      if 2 == x.Relashionship:
+         print(fmt.format(( inf := x.ProcessorInfo.Cache), inf.Size // 1024))
+
+
 def getfrequency():
    # print(read_registry('~MHz'))
    buf = create_string_buffer((sz := sizeof(PROCESSOR_POWER_INFORMATION)))
@@ -117,13 +187,11 @@ def getmodel():
    except Exception:
       # print(read_registry('ProcessorNameString'))
       req = c_ulong(0) # SystemProcessorBrandString = 0n105
-      nts = NtQuerySystemInformation(105, None, 0, byref(req))
-      if STATUS_INFO_LENGTH_MISMATCH != nts or 0 == req.value:
+      if STATUS_INFO_LENGTH_MISMATCH != (nts := NtQuerySystemInformation(105, None, 0, byref(req))):
          print(FormatError(RtlNtStatusToDosError(nts)))
          return
       buf = create_unicode_buffer(req.value)
-      nts = NtQuerySystemInformation(105, buf, len(buf), None)
-      if not NT_SUCCESS(nts):
+      if not NT_SUCCESS((nts := NtQuerySystemInformation(105, buf, len(buf), None))):
          print(FormatError(RtlNtStatusToDosError(nts)))
          return
       print(str(buf, 'utf-8').strip())

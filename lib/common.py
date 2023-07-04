@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__all__ = ['CPUID_LEAF', 'CStruct', 'cmnmodel', 'cmnvendor', 'opcodes', 'sizeof']
+__all__ = ['CPUID_LEAF', 'CStruct', 'cmnmodel', 'cmnvendor', 'opcodes', 'maxsize', 'sizeof']
 
 from ctypes import Structure, c_uint32, sizeof
 from os     import name

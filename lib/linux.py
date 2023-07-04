@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__all__ = ['getmodel', 'getvendor']
+__all__ = ['getfrequency', 'getmodel', 'getvendor']
 
 from common import *
 from ctypes import CFUNCTYPE, POINTER, addressof, c_uint32, c_void_p
@@ -25,6 +25,9 @@ def read_cpuinfo(v : str) -> str:
          lambda x: compile(f'(?i:{v})').match(x), set(f.readlines())
       )).split(':')[1].strip()
    return res
+
+def getfrequency():
+   print(read_cpuinfo('cpu mhz'))
 
 def getmodel():
    try:

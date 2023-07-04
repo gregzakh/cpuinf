@@ -177,7 +177,7 @@ def getfrequency():
 def gethypervisor():
    # there're also several classes for NtQuerySystemInformation marked with the word "hyper"
    # they all seem to be useful when detailed hypervisor information is needed
-   data = CPUID() # bit 32 of ECX (leaf 1) points if the feature is present
+   data = CPUID() # bit 31 of ECX (leaf 1) points if the feature is present
    print(cmnvendor(data(0x40000000), True) if 1 == data(1).raw[2] >> 31 else 'Not presented.')
 
 
